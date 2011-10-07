@@ -11,7 +11,11 @@ import json
 import os
 
 class JSRPC(HTTPServer, threading.Thread):
-	def __init__(self):
+	def __init__(self, **kargs):
+		if 'request_handler' in kargs:
+			request_handler = kargs['request_handler']
+		else:	request_handler = RequestHandler
+	
 		#Counter: used to give messages IDs
 		self.counter = 0
 		self.counter_lock = multiprocessing.Lock()
@@ -23,7 +27,7 @@ class JSRPC(HTTPServer, threading.Thread):
 		#Message queue: messages to be written to the socket
 		self.message_queue = Queue.Queue()
 		
-		HTTPServer.__init__(self, ('', 8080), self.request_handler)
+		HTTPServer.__init__(self, ('', 8080), request_handler)
 		threading.Thread.__init__(self)
 		
 		self.http_root = ''
@@ -56,61 +60,59 @@ class JSRPC(HTTPServer, threading.Thread):
 	
 	def run(self):
 		self.serve_forever()
-	
-	@class
-	class request_handler(BaseHTTPRequestHandler):
-	
-		def log_message(self, *args):
-			pass
-		def do_GET(self):
-			return self._do_GET()
-		def do_POST(self):
-			if self.path == '/ajax.cgi':
-				#Decode the data
-				ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
-				length = int(self.headers.getheader('content-length'))
-				postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
-				messages = json.loads(postvars['array'][0])
-				#Return the return_values
-				with self.server.message_buffer_lock:
-					for m in messages:
-						if m['type'] == 'message':
-							self.server.message_handler(m['value'])
-						if m['type'] == 'fn':
-							self.server.message_buffer[m['id']].get_return(m['value'])
-				
-				#Build and encode write array
-				write = []
-				try:
-					while True:
-						write.append(self.server.message_queue.get_nowait())
-				except Queue.Empty: pass
-				write = json.dumps(write)
-				
-				#Send data
-				self.send_response(200)
-				self.send_header('Content-type', 'text/html')
-				self.end_headers()
-				self.wfile.write(write)
-			else:
-				return self._do_POST()
-		def _do_GET(self):
-			if self.path.strip('/') == '':
-				self.path = '/index.html'
-			self.path = self.server.http_root + self.path
+
+class RequestHandler(BaseHTTPRequestHandler):	
+	def log_message(self, *args):
+		pass
+	def do_GET(self):
+		return self._do_GET()
+	def do_POST(self):
+		if self.path == '/ajax.cgi':
+			#Decode the data
+			ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
+			length = int(self.headers.getheader('content-length'))
+			postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
+			messages = json.loads(postvars['array'][0])
+			#Return the return_values
+			with self.server.message_buffer_lock:
+				for m in messages:
+					if m['type'] == 'message':
+						self.server.message_handler(m['value'])
+					if m['type'] == 'fn':
+						self.server.message_buffer[m['id']].get_return(m['value'])
 			
+			#Build and encode write array
+			write = []
 			try:
-				f = open(self.path)
-				self.send_response(200)
-				self.send_header('Content-type', 'text/html')
-				self.end_headers()
-				self.wfile.write(f.read())
-				f.close()
-			except IOError:
-				self.send_error(404,'File Not Found: %s' % self.path)
-			return
-		def _do_POST(self):
-			self._do_get()
+				while True:
+					write.append(self.server.message_queue.get_nowait())
+			except Queue.Empty: pass
+			write = json.dumps(write)
+			
+			#Send data
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(write)
+		else:
+			return self._do_POST()
+	def _do_GET(self):
+		if self.path.strip('/') == '':
+			self.path = '/index.html'
+		self.path = self.server.http_root + self.path
+		
+		try:
+			f = open(self.path)
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(f.read())
+			f.close()
+		except IOError:
+			self.send_error(404,'File Not Found: %s' % self.path)
+		return
+	def _do_POST(self):
+		self._do_get()
 class FakeNode:
 	def __init__(self, name, parent, ty, **setup):
 		self.parent = parent

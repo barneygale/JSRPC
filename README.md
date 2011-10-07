@@ -83,12 +83,15 @@ The default webserver serves files from a specific folder. You can set your HTTP
 
 You can also substitute in your own request handler. Do it like this:
 
-    class MyRequestHandler(jsrpc.JSRPC.request_handler):
+    class MyRequestHandler(jsrpc.RequestHandler):
         def _do_GET(self):
             ...
         def _do_POST(self):
             ...
-    js.request_handler = MyRequestHandler()
 
-Note that the jsrpc.JSRPC.request_handler is almost identical to BaseHTTPRequestHandler, so 
+    js = jsrpc.JSRPC(request_handler = MyRequestHandler)
+    js.start()
+
+Note that the jsrpc.RequestHandler is almost identical to BaseHTTPRequestHandler, so 
 base your extension on that. You get passed every HTTP request that isn't part of the RPC stuff.
+You also have access to the JSRPC() object via self.server
