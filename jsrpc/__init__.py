@@ -23,7 +23,7 @@ class JSRPC(HTTPServer, threading.Thread):
 		#Message queue: messages to be written to the socket
 		self.message_queue = Queue.Queue()
 		
-		HTTPServer.__init__(self, ('', 8080), self.http_handler)
+		HTTPServer.__init__(self, ('', 8080), self.request_handler)
 		threading.Thread.__init__(self)
 		
 		self.http_root = ''
@@ -57,7 +57,8 @@ class JSRPC(HTTPServer, threading.Thread):
 	def run(self):
 		self.serve_forever()
 	
-	class http_handler(BaseHTTPRequestHandler):
+	@class
+	class request_handler(BaseHTTPRequestHandler):
 	
 		def log_message(self, *args):
 			pass
