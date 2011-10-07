@@ -44,7 +44,14 @@ asynchronous calls won't block, and will call a specified callback function with
         print text
     js.async(callback).window.prompt('Why are you here?')
 
-## Notes on variable access
+## Limitations
+
+### Data format
+You can only pass around data that can be encoded as JSON. numbers, arrays, dicts, strings, etc
+are all fine, but you won't get anything back from js.sync.document.getElementById('blah'), and
+you can forget about most objects.
+
+### Variable access
 When accessing variables in async mode, you will _always_ needs to call .flush(). For example:
 
     def callback(location):
