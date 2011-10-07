@@ -1,21 +1,25 @@
-#!/usr/bin/python
+import os
+import re
+import json
 
-import string,cgi,time
-from os import curdir, sep
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import multiprocessing
 import threading
 import Queue
-import re
-import json
-import os
+
+from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+import cgi
 
 class JSRPC(HTTPServer, threading.Thread):
 	def __init__(self, **kargs):
 		if 'request_handler' in kargs:
 			request_handler = kargs['request_handler']
 		else:	request_handler = RequestHandler
-	
+
+		self.http_root = ''
+		self.sync =  SyncRootNode('sync',  self, SyncNode)
+		self.async= AsyncRootNode('async', self, AsyncNode)
+		self.message_handler = lambda message: 0
+		
 		#Counter: used to give messages IDs
 		self.counter = 0
 		self.counter_lock = multiprocessing.Lock()
@@ -29,28 +33,17 @@ class JSRPC(HTTPServer, threading.Thread):
 		
 		HTTPServer.__init__(self, ('', 8080), request_handler)
 		threading.Thread.__init__(self)
-		
-		self.http_root = ''
-		self.sync = FakeNode('sync', self, SyncNode)
-	
-	def async(self, *args):
-		if args: kargs={'callback': args[0]}
-		else:    kargs={}
-		return FakeNode('async', self, AsyncNode, **kargs)
-	def message_handler(self, message):
-		pass
 	#Get a new ID from the counter
 	def get_id(self):
 		with self.counter_lock:
 			self.counter += 1
 			j = self.counter
 		return j
-	
-	#Note: we're at the bottom of the stack so we send off to the JS
+
 	def pass_down(self, node, data):
-		#Add to message buffer
-		data['path'] = data['path'][1:]
+		data['path'] = data['path'][1:] #Pop sync/async off the path
 		id = self.get_id()
+		#Add to message buffer
 		with self.message_buffer_lock:
 			self.message_buffer[id] = node
 		#Send the ID with the message
@@ -60,7 +53,6 @@ class JSRPC(HTTPServer, threading.Thread):
 	
 	def run(self):
 		self.serve_forever()
-
 class RequestHandler(BaseHTTPRequestHandler):	
 	def log_message(self, *args):
 		pass
@@ -79,7 +71,10 @@ class RequestHandler(BaseHTTPRequestHandler):
 					if m['type'] == 'message':
 						self.server.message_handler(m['value'])
 					if m['type'] == 'fn':
-						self.server.message_buffer[m['id']].get_return(m['value'])
+						try:
+							self.server.message_buffer[m['id']].get_return(m['value'])
+							del self.server.message_buffer[m['id']]
+						except: pass # <-- awesome error handling
 			
 			#Build and encode write array
 			write = []
@@ -113,7 +108,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 		return
 	def _do_POST(self):
 		self._do_get()
-class FakeNode:
+class Node:
 	def __init__(self, name, parent, ty, **setup):
 		self.parent = parent
 		self.name = name
@@ -124,28 +119,28 @@ class FakeNode:
 	def __getattr__(self, name):
 		m = re.match('^__.*__$', name)
 		#System attribute (__foo__): interpret as python
-		if m:
-			
-			return getattr(self.flush(), name)
+		if m: return getattr(self.flush(), name)
 		#None system call: interpret as javascript
-		else:
-			return self.ty(name, self, self.ty, **self.setup)
+		else: return self.ty(name, self, self.ty, **self.setup)
 	
+	#Special case: function call
 	def __call__(self, *args):
 		return self.execute({'type':'fn', 'args':list(args)})
 	
+	#Insert current node's name to path and pass to parent
 	def pass_down(self, node, data):
 		data["path"].insert(0, self.name)
 		return self.parent.pass_down(node, data)
 	
+	#Force the current node to be evaluated
 	def flush(self):
 		if self.return_value == None:
 			self.return_value = self.execute({'type':'nofn'})
 		return self.return_value
 
-class SyncNode(FakeNode):
+class SyncNode(Node):
 	def __init__(self, name, parent, ty, **setup):
-		FakeNode.__init__(self, name, parent, ty, **setup)
+		Node.__init__(self, name, parent, ty, **setup)
 		self.lock = multiprocessing.Lock()
 
 	def execute(self, data):
@@ -153,7 +148,7 @@ class SyncNode(FakeNode):
 		#Send the request
 		self.lock.acquire()
 		self.pass_down(self, data)
-		#Wait for a reply
+		#Wait for a reply (i.e. the lock to be released)
 		self.lock.acquire()
 		self.lock.release()
 		return self.return_value_temp
@@ -163,9 +158,9 @@ class SyncNode(FakeNode):
 		self.lock.release()
 		
 
-class AsyncNode(FakeNode):
+class AsyncNode(Node):
 	def __init__(self, name, parent, ty, **setup):
-		FakeNode.__init__(self, name, parent, ty, **setup)
+		Node.__init__(self, name, parent, ty, **setup)
 		if 'callback' in setup:
 			self.callback = setup['callback']
 		else:   self.callback = None
@@ -178,3 +173,11 @@ class AsyncNode(FakeNode):
 	def get_return(self, value):
 		if self.callback:
 			self.callback(value)
+
+class SyncRootNode(Node):
+	pass
+class AsyncRootNode(Node):
+	def __call__(self, *args):
+		if args: kargs={'callback': args[0]}
+		else:    kargs={}
+		return AsyncRootNode('async', self.parent, AsyncNode, **kargs)

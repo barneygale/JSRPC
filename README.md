@@ -44,6 +44,10 @@ asynchronous calls won't block, and will call a specified callback function with
         print text
     js.async(callback).window.prompt('Why are you here?')
 
+if you don't care about return values, you can cast into the void:
+
+    js.async.window.alert('To see with eyes unclouded by hate.')
+
 ## Limitations
 
 ### Data format
