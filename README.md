@@ -4,6 +4,7 @@ applications with web interfaces. the JSRPC class creates a small HTTP server, t
 requests can be exchanged.
 
 The project consists of two parts:
+
 1. A python library providing a JSRPC() object, through which javascript calls can be made
 2. A small jQuery plugin to handle these calls
 
@@ -82,12 +83,12 @@ The default webserver serves files from a specific folder. You can set your HTTP
 
 You can also substitute in your own request handler. Do it like this:
 
-    class MyRequestHandler(jsrpc.request_handler):
+    class MyRequestHandler(jsrpc.JSRPC.request_handler):
         def _do_GET(self):
             ...
         def _do_POST(self):
             ...
-    jsrpc.request_handler = MyRequestHandler()
+    js.request_handler = MyRequestHandler()
 
-Note that the jsrpc.request_handler is almost identical to BaseHTTPRequestHandler, so base your
-extension on that. You get passed every HTTP request that isn't part of the RPC stuff.
+Note that the jsrpc.JSRPC.request_handler is almost identical to BaseHTTPRequestHandler, so 
+base your extension on that. You get passed every HTTP request that isn't part of the RPC stuff.
