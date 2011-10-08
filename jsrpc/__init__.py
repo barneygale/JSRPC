@@ -1,4 +1,5 @@
 import os
+import glob
 import re
 import json
 
@@ -11,6 +12,10 @@ import cgi
 
 class JSRPC(HTTPServer, threading.Thread):
 	def __init__(self, **kargs):
+		self.include_path = os.path.dirname(os.path.realpath(__file__))
+		self.js_includes = []
+		for js in glob.glob(os.path.join(self.include_path, '*.js')):
+			self.js_includes.append(os.path.basename(js))
 		if 'request_handler' in kargs:
 			request_handler = kargs['request_handler']
 		else:	request_handler = RequestHandler
@@ -57,7 +62,16 @@ class RequestHandler(BaseHTTPRequestHandler):
 	def log_message(self, *args):
 		pass
 	def do_GET(self):
-		return self._do_GET()
+		basename = os.path.basename(self.path) 
+		if basename in self.server.js_includes:
+			f = open(os.path.join(self.server.include_path, basename))
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(f.read())
+			f.close()
+		else:
+			return self._do_GET()
 	def do_POST(self):
 		if self.path == '/ajax.cgi':
 			#Decode the data

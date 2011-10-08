@@ -7,7 +7,7 @@ try:
 		print "    -> got a message: %s" % message
 	
 	js = jsrpc.JSRPC()
-	js.http_root = 'web'
+	js.http_root = 'demo_www'
 	js.message_handler = get_message
 	js.start()
 
