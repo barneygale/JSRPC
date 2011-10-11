@@ -1,24 +1,28 @@
+import os
+import glob
 import re
 import json
 
 import multiprocessing
+import threading
 import Queue
 
-import webserver
+from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+import cgi
 
-class JSRPC:
+class JSRPC(HTTPServer, threading.Thread):
 	def __init__(self, **kargs):
-		#Webserver
-		if 'server' in kargs:
-			self.server = kargs['server']
-		else:
-			self.server = webserver.JSRPCServer(self.io, **kargs)
-			self.server.start()
-		#.sync and .async
-		self.sync =  SyncRootNode('sync',  self,  SyncNode)
+		self.include_path = os.path.dirname(os.path.realpath(__file__))
+		self.js_includes = []
+		for js in glob.glob(os.path.join(self.include_path, '*.js')):
+			self.js_includes.append(os.path.basename(js))
+		if 'request_handler' in kargs:
+			request_handler = kargs['request_handler']
+		else:	request_handler = RequestHandler
+
+		self.http_root = ''
+		self.sync =  SyncRootNode('sync',  self, SyncNode)
 		self.async= AsyncRootNode('async', self, AsyncNode)
-		
-		#do-nothing message handler
 		self.message_handler = lambda message: 0
 		
 		#Counter: used to give messages IDs
@@ -32,6 +36,8 @@ class JSRPC:
 		#Message queue: messages to be written to the socket
 		self.message_queue = Queue.Queue()
 		
+		HTTPServer.__init__(self, ('', 8080), request_handler)
+		threading.Thread.__init__(self)
 	#Get a new ID from the counter
 	def get_id(self):
 		with self.counter_lock:
@@ -50,28 +56,72 @@ class JSRPC:
 		#Put it on the message queue
 		self.message_queue.put(data)
 	
-	#1. Write return values to handlers
-	#2. Read from message queue
-	def io(self, read):
-		#Read
-		read = json.loads(read)
-		with self.message_buffer_lock:
-			for m in read:
-				if m['type'] == 'message':
-					self.message_handler(m['value'])
-				if m['type'] == 'fn':
-					try:
-						self.message_buffer[m['id']].get_return(m['value'])
-						del self.message_buffer[m['id']]
-					except: pass # <-- awesome error handling
-		#Write
-		write = []
-		try:
-			while True:
-				write.append(self.message_queue.get_nowait())
-		except Queue.Empty: pass
-		return json.dumps(write)
+	def run(self):
+		self.serve_forever()
+class RequestHandler(BaseHTTPRequestHandler):	
+	def log_message(self, *args):
+		pass
+	def do_GET(self):
+		basename = os.path.basename(self.path) 
+		if basename in self.server.js_includes:
+			f = open(os.path.join(self.server.include_path, basename))
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(f.read())
+			f.close()
+		else:
+			return self._do_GET()
+	def do_POST(self):
+		if self.path == '/ajax.cgi':
+			#Decode the data
+			ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
+			length = int(self.headers.getheader('content-length'))
+			postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
+			messages = json.loads(postvars['array'][0])
+			#Return the return_values
+			with self.server.message_buffer_lock:
+				for m in messages:
+					if m['type'] == 'message':
+						self.server.message_handler(m['value'])
+					if m['type'] == 'fn':
+						try:
+							self.server.message_buffer[m['id']].get_return(m['value'])
+							del self.server.message_buffer[m['id']]
+						except: pass # <-- awesome error handling
+			
+			#Build and encode write array
+			write = []
+			try:
+				while True:
+					write.append(self.server.message_queue.get_nowait())
+			except Queue.Empty: pass
+			write = json.dumps(write)
+			
+			#Send data
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(write)
+		else:
+			return self._do_POST()
+	def _do_GET(self):
+		if self.path.strip('/') == '':
+			self.path = '/index.html'
+		self.path = self.server.http_root + self.path
 		
+		try:
+			f = open(self.path)
+			self.send_response(200)
+			self.send_header('Content-type', 'text/html')
+			self.end_headers()
+			self.wfile.write(f.read())
+			f.close()
+		except IOError:
+			self.send_error(404,'File Not Found: %s' % self.path)
+		return
+	def _do_POST(self):
+		self._do_get()
 class Node:
 	def __init__(self, name, parent, ty, **setup):
 		self.parent = parent
@@ -140,7 +190,6 @@ class AsyncNode(Node):
 
 class SyncRootNode(Node):
 	pass
-
 class AsyncRootNode(Node):
 	def __call__(self, *args):
 		if args: kargs={'callback': args[0]}
