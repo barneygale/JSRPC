@@ -5,11 +5,11 @@ import time
 try:
 	def get_message(message):
 		print "    -> got a message: %s" % message
-	
+
 	js = jsrpc.JSRPC()
-	js.http_root = 'demo_www'
 	js.message_handler = get_message
-	js.start()
+	js.server.http_root = 'demo_www'
+	js.server.start()
 
 
 	print "### Testing synchronous"
@@ -38,5 +38,5 @@ try:
 	print "# Function call"
 	js.async.window.prompt('Enter some data...')
 	time.sleep(10000)
-except:
-	js.shutdown()
+except Exception, e:
+	js.server.shutdown()
