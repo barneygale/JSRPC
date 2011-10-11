@@ -19,13 +19,11 @@ class JSRPCServer(HTTPServer, threading.Thread):
 			self.js_includes.append(os.path.basename(js))
 		
 		#Init
-		HTTPServer.__init__(self, (self.config['interface'], self.config['port']), self.config['handler'])
-			
+		HTTPServer.__init__(self, (self.config['interface'], self.config['port']), self.config['handler'])	
 		threading.Thread.__init__(self)
+
 	def run(self):
 		self.serve_forever()
-	
-
 class JSRPCRequestHandler(BaseHTTPRequestHandler):	
 	def log_message(self, *args):
 		pass
