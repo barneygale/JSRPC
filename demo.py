@@ -6,11 +6,7 @@ try:
 	def get_message(message):
 		print "    -> got a message: %s" % message
 
-	js = jsrpc.JSRPC()
-	js.message_handler = get_message
-	js.server.http_root = 'demo_www'
-	js.server.start()
-
+	js = jsrpc.JSRPC(port=8080, http_root='demo_www')
 
 	print "### Testing synchronous"
 	print "# Variable access"

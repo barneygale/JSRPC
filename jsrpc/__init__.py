@@ -10,9 +10,10 @@ class JSRPC:
 	def __init__(self, **kargs):
 		#Webserver
 		if 'server' in kargs:
-		        self.server = kargs['server']
-		else:   self.server = webserver.JSRPCServer(self.io)
-
+			self.server = kargs['server']
+		else:
+			self.server = webserver.JSRPCServer(self.io, **kargs)
+			self.server.start()
 		#.sync and .async
 		self.sync =  SyncRootNode('sync',  self,  SyncNode)
 		self.async= AsyncRootNode('async', self, AsyncNode)
@@ -139,6 +140,7 @@ class AsyncNode(Node):
 
 class SyncRootNode(Node):
 	pass
+
 class AsyncRootNode(Node):
 	def __call__(self, *args):
 		if args: kargs={'callback': args[0]}

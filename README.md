@@ -14,8 +14,6 @@ in python:
     import jsrpc
     
     js = jsrpc.JSRPC()
-    js.http_root = 'web'
-    js.start()
     
     #For example:
     print "window.location.href: %s" % js.sync.window.location.href
@@ -87,22 +85,25 @@ You can then send messages (with an arbitary data format) to python from javascr
         });
     });
 
-## Webserver
-The default webserver serves files from a specific folder. You can set your HTTP root location thusly:
+## Webserver options
+JSRPC packages a basic webserver based on BaseHTTPServer.HTTPServer. You can pass options to JSRPC():
 
-    js.http_root = 'public_html'
+* `server` specifies a server object. It is passed the `jsrpc.io` method, and any kargs, in its constructor
+* if `server` isn't specified, you can configure the default server:
+	* `interface`: the interface to listen on (defaults to '')
+	* `port`: defaults to 8080
+	* `http_root`: directory to serve files from
+	* `request_handler`: subclass of BaseHTTPRequestHandler. Defaults to webserver.JSRPCRequestHandler.
 
-You can also substitute in your own request handler. Do it like this:
+Subclassing JSRPCRequestHandler is useful for handling GET and POST yourself
 
-    class MyRequestHandler(jsrpc.RequestHandler):
+    class MyRequestHandler(webserver.JSRPCRequestHandler):
         def _do_GET(self):
             ...
         def _do_POST(self):
             ...
 
     js = jsrpc.JSRPC(request_handler = MyRequestHandler)
-    js.start()
 
 Note that the jsrpc.RequestHandler is almost identical to BaseHTTPRequestHandler, so 
 base your extension on that. You get passed every HTTP request that isn't part of the RPC stuff.
-You also have access to the JSRPC() object via self.server
