@@ -1,23 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="utf-8">
-	<title>JSRPC test</title>
-	<script src="jquery-1.6.4.js"></script>
-	<script src="jquery-json-2.3.js"></script>
-	<script src="jquery-jsrpc.js"></script>
-	<script>
-	$(document).ready(function() {
-		$.jsrpc_start();
-		$('#send').click(function() {
-			$.jsrpc_message($('#text').val());
-		});
-	});
-	</script>
+    <meta charset="utf-8">
+    <title>JSRPC test</title>
+    <script src="jquery-1.6.4.js"></script>
+    <script src="jquery-json-2.3.js"></script>
+    <script src="jquery-jsrpc.js"></script>
+    <script>
+    $(document).ready(function() {
+        $.jsrpc_start();
+        $('#send').click(function() {
+            $.jsrpc_message($('#text').val());
+        });
+    });
+    </script>
 </head>
 <body>
-	<input type="text" id="text" />
-	<input type="submit" id="send" value="send" />
+    <input type="text" id="text" />
+    <input type="submit" id="send" value="send" />
 </body>
 </html>
 
